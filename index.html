@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script type="text/javascript" src="input.js"></script>
+    <script type="text/javascript" src="resource.js"></script>
+    <script type="text/javascript" src="jquery-3.2.1.js"></script>
+    <script>
+        function init() {
+            document.getElementById('play-again').addEventListener('click', function() {
+                main();
+            });
+            lastTime = Date.now();
+        }
+
+        var playerSpeed = 50;
+        var gameTime = 0;
+    </script>
+</head>
+<body>
+<button id="play-again">12345</button>
+
+<script>
+    var requestAnimFrame = (function(){
+        return window.requestAnimationFrame       ||
+            window.webkitRequestAnimationFrame ||
+            window.mozRequestAnimationFrame    ||
+            window.oRequestAnimationFrame      ||
+            window.msRequestAnimationFrame     ||
+            function(callback){
+                window.setTimeout(callback, 1000 / 60);
+            };
+    })();
+
+    var canvas = document.createElement("canvas");
+    var ctx = canvas.getContext("2d");
+    canvas.width = 640;
+    canvas.height = 480;
+    document.body.appendChild(canvas);
+
+    var lastTime;
+
+    function spriteAnimate(url, pos, size, speed, frames, once) {
+        this.url = url;
+        this.pos = pos;
+        this.size = size;
+        this.speed = speed;
+        this._index = 0;
+        this.frames = frames;
+        this.once = once || false;
+
+        this.render = function (ctx) {
+            var frame;
+
+            if (this.speed > 0) {
+                var max = this.frames.length;
+                var idx = Math.floor(this._index);
+                frame = this.frames[idx % max];
+
+                if (this.once && idx >= max) {
+                    this.done = true;
+                    return;
+                }
+            }
+            else {
+                frame = 0;
+            }
+
+            var x = this.pos[0];
+            var y = this.pos[1];
+
+            x += frame * this.size[0];
+
+            ctx.drawImage(resources.get(this.url), x, y, this.size[0], this.size[1], 0, 0, this.size[0], this.size[1]);
+        };
+
+        this.update = function (dt) {
+            this._index += this.speed * dt;
+        }
+    };
+
+    resources.load(
+        ['tS.png',
+        'grassland1.png',
+        'ali.png']
+    );
+    resources.onReady(init);
+
+    var background = {
+        pos:[0, 0],
+        tiles: 'grassland1.png',
+        size: [1026, 768]
+    };
+
+    var player = {
+        pos: [320, 240],
+        dir: 'down',
+        animate: 'stand',
+        sprite: new spriteAnimate('ali.png', [0, 55], [55, 55], 2, [0, 1]),
+
+        updateAnimation: function (animate) {
+            if (animate != this.animate) {
+                switch (animate) {
+                    case 'right':
+                        this.sprite = new spriteAnimate('ali.png', [0, 0], [55, 55], 6, [0, 1, 2, 3, 4, 5]);
+                        this.animate = animate;
+                        break;
+                    case 'left':
+                        this.sprite = new spriteAnimate('ali.png', [0, 110], [55, 55], 6, [0, 1, 2, 3, 4, 5]);
+                        this.animate = animate;
+                        break;
+                    case 'up':
+                        this.sprite = new spriteAnimate('ali.png', [0, 165], [55, 55], 6, [0, 1, 2, 3, 4, 5]);
+                        this.animate = animate;
+                        break;
+                    case 'down':
+                        this.sprite = new spriteAnimate('ali.png', [0, 220], [55, 55], 6, [0, 1, 2, 3, 4, 5]);
+                        this.animate = animate;
+                        break;
+                    case 'stand':
+                        this.sprite = new spriteAnimate('ali.png', [0, 55], [55, 55], 2, [0, 1]);
+                        this.animate = animate;
+                        break;
+                }
+            }
+        }
+    };
+
+    function main() {
+        var now = Date.now();
+        var dt = (now - lastTime) / 1000.0;
+
+        update(dt);
+        render();
+
+        lastTime = now;
+        requestAnimFrame(main);
+    }
+
+        function update(dt) {
+            gameTime += dt;
+
+            var animate;
+            var axisLocker = checkLocBound();
+
+            animate = handleInput(dt, axisLocker);
+            updateEntities(dt, animate);
+
+        }
+
+        function updateEntities(dt, animate) {
+            // Update the player sprite animation
+            player.updateAnimation(animate);
+            player.sprite.update(dt);
+        }
+
+        function handleInput(dt, axisLocker) {
+            var animate = 'stand';
+
+            if (input.isDown('DOWN') || input.isDown('s')) {
+                background.pos[1] -= playerSpeed * dt;
+                animate = 'down';
+                player.dir = 'down';
+            }
+
+            if (input.isDown('UP') || input.isDown('w')) {
+                background.pos[1] += playerSpeed * dt;
+                animate = 'up';
+                player.dir = 'up';
+            }
+
+            if (input.isDown('LEFT') || input.isDown('a')) {
+                if (axisLocker[0]) {
+                    if (background.pos[0] == canvas.width) {
+                        background.pos[0] += playerSpeed * dt;
+                    } else {
+                        player.pos[0] -= playerSpeed * dt;
+                    }
+                } else {
+                    background.pos[0] += playerSpeed * dt;
+                }
+                animate = 'left';
+                player.dir = 'left';
+            }
+
+            if (input.isDown('RIGHT') || input.isDown('d')) {
+                if (axisLocker[0]) {
+                    if (background.pos[0] == 0) {
+                        background.pos[0] -= playerSpeed * dt;
+                    } else {
+                        player.pos[0] += playerSpeed * dt;
+                    }
+                } else {
+                    background.pos[0] -= playerSpeed * dt;
+                }
+                animate = 'right';
+                player.dir = 'right';
+            }
+            return animate;
+        }
+        
+        function checkCollisions() {
+            checkLocBound();
+        }
+
+        function checkLocBound() {
+            var axisLocker = [];
+            if (background.pos[0] >= 0) {
+                background.pos[0] = 0;
+                axisLocker[0] = true;
+            } else if (background.pos[0] <= -(background.size[0]-canvas.width)) {
+                background.pos[0] = -(background.size[0]-canvas.width);
+                axisLocker[0] = true;
+            } else {
+                axisLocker[0] = false;
+            }
+            if (background.pos[1] >= 0) {
+                background.pos[1] = 0;
+                axisLocker[1] = true;
+            } else if ( background.pos[1] <= -(background.size[1]-canvas.height)) {
+                background.pos[1] = -(background.size[1]-canvas.height);
+                axisLocker[1] = true;
+            } else {
+                axisLocker[1] = false;
+            }
+            return axisLocker;
+        }
+        function render() {
+            ctx.drawImage(resources.get('grassland1.png'), background.pos[0], background.pos[1]);
+            renderEntity(player);
+        }
+
+        function renderEntity(entity) {
+            ctx.save();
+            ctx.translate(entity.pos[0], entity.pos[1]);
+            entity.sprite.render(ctx);
+            ctx.restore();
+        }
+
+</script>
+</body>
+</html>
